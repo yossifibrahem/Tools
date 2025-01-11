@@ -13,10 +13,6 @@ Download the repo
 ```bash
 git clone https://github.com/yossifibrahem/Tools.git
 ```
-
-```bash
-cd Tools
-```
 Run the code
 ```bash
 python Tools\LM_tools.py
