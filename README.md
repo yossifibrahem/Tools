@@ -1,5 +1,5 @@
 # Tool-Calls
-Make LLM search web and write and run python codes
+Make LLM search web, write and run python codes
 
 this python code implement tool calls to make LLMs:
 * search web and scrape relevant information
