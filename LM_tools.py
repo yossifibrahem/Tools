@@ -2,15 +2,15 @@
 import json
 import shutil
 from datetime import datetime
+import os
+from datetime import datetime
 
 # Third-party imports
 from openai import OpenAI
 
-from Python_tool.PythonExecutor_secure import execute_python_code as python
-from web_tool.web_browsing import text_search as web
-from wiki_tool.search_wiki import fetch_wikipedia_content as wiki
-from web_tool.web_scraper import WebContentScraper
-url = WebContentScraper().scrape_website
+from Python_tool.PythonExecutor_secure import execute_python_code as run_python_code
+from web_tool.web_browsing import text_search as search_web
+from wiki_tool.search_wiki import fetch_wikipedia_content as search_wiki
 
 
 client = OpenAI(base_url="http://127.0.0.1:1234/v1", api_key="lm-studio")
@@ -19,7 +19,7 @@ MODEL = "lmstudio-community/qwen2.5-7b-instruct"
 Tools = [{
     "type": "function",
     "function": {
-        "name": "python",
+        "name": "run_python_code",
         "description": "Execute Python code and return the execution results. Use for math problems or task automation.",
         "parameters": {
             "type": "object",
@@ -32,7 +32,7 @@ Tools = [{
 }, {
     "type": "function",
     "function": {
-        "name": "web",
+        "name": "search_web",
         "description": f"Search the web for relevant information. Current timestamp: {datetime.now()}",
         "parameters": {
             "type": "object",
@@ -60,27 +60,14 @@ Tools = [{
 }, {
     "type": "function",
     "function": {
-        "name": "wiki",
+        "name": "search_wiki",
         "description": "Search Wikipedia for the most relevant article introduction",
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query for Wikipedia article"}
+                "search_query": {"type": "string", "description": "Search query for Wikipedia article"}
             },
-            "required": ["query"]
-        }
-    }
-}, {
-    "type": "function",
-    "function": {
-        "name": "url",
-        "description": "Scrape a website for its content",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "URL of the website to scrape"}
-            },
-            "required": ["url"]
+            "required": ["search_query"]
         }
     }
 }]
@@ -166,8 +153,8 @@ def chat_loop():
                 for tool_call in tool_calls:
                     arguments = json.loads(tool_call["function"]["arguments"])
 
-                    if tool_call["function"]["name"] == "python":
-                        result = python(arguments["code"])
+                    if tool_call["function"]["name"] == "run_python_code":
+                        result = run_python_code(arguments["code"])
                         messages.append({
                             "role": "tool",
                             "content": str(result),
@@ -185,26 +172,14 @@ def chat_loop():
                         else:
                             print(f"Error running and executing the code\n{result['error']}")
                         print("-" * terminal_width)
-                    
-                    elif tool_call["function"]["name"] == "wiki":
-                        result = wiki(arguments["query"])
-                        messages.append({
-                            "role": "tool",
-                            "content": str(result),
-                            "tool_call_id": tool_call["id"]
-                        })
-                        terminal_width = shutil.get_terminal_size().columns
-                        if result:
-                            print("\n" + "-" * terminal_width)
-                            print(result["title"])
-                            print("-" * terminal_width)
-                            print(result['content'])
-                        else:
-                            print(f"No results")
-                        print("-" * terminal_width)
-                    
-                    elif tool_call["function"]["name"] == "web":
-                        result = web(arguments["query"], arguments.get("embedding_matcher", arguments["query"]), arguments.get("number_of_websites", 4), arguments.get("number_of_citations", 5))
+
+                    elif tool_call["function"]["name"] == "search_web":
+                        result = search_web(
+                            arguments["query"],
+                            arguments["embedding_matcher"],
+                            arguments.get("number_of_websites", 3),
+                            arguments.get("number_of_citations", 5)
+                        )
                         messages.append({
                             "role": "tool",
                             "content": str(result),
@@ -212,23 +187,31 @@ def chat_loop():
                         })
                         terminal_width = shutil.get_terminal_size().columns
                         print("\n" + "-" * terminal_width)
-                        print(f"query: {arguments['query']}")
-                        print(f"from {arguments.get('number_of_websites', 4)} websites and {arguments.get('number_of_citations', 5)} results")
-                        print("-" * terminal_width)
                         if result:
-                            for res in result:
-                                print(res["url"])
+                            print(f"Search Query: '{arguments['query']}', embedding_matcher: '{arguments['embedding_matcher']}'")
+                            print(f"Visited ({arguments.get('number_of_websites', 3)}) websites and returned ({arguments.get('number_of_citations', 5)}) results")
+                            for idx, website in enumerate(result):
+                                print(f"URL {idx}: {website['url']}\n{website['citation']}")
                         else:
-                            print("no results")
+                            print(f"\nError fetching websites content: {arguments['query']}")
                         print("-" * terminal_width)
 
-                    elif tool_call["function"]["name"] == "url":
-                        result = url(arguments["url"])
+                    elif tool_call["function"]["name"] == "search_wiki":
+                        result = search_wiki(arguments["search_query"])
                         messages.append({
                             "role": "tool",
                             "content": str(result),
                             "tool_call_id": tool_call["id"]
                         })
+                        terminal_width = shutil.get_terminal_size().columns
+                        print("\n" + "-" * terminal_width)
+                        if result["status"] == "success":
+                            print(f"Wikipedia article: {result['title']}")
+                            print("-" * terminal_width)
+                            print(result["content"])
+                        else:
+                            print(f"\nError fetching Wikipedia content: {result['message']}")
+                        print("-" * terminal_width)
 
                 # Continue checking for more tool calls after tool execution
                 continue_tool_execution = True
