@@ -6,9 +6,9 @@ from datetime import datetime
 # Third-party imports
 from openai import OpenAI
 
-from Python_tool.PythonExecutor_secure import execute_python_code as run_python_code
-from web_tool.web_browsing import text_search as search_web
-from wiki_tool.search_wiki import fetch_wikipedia_content as search_wiki
+from Python_tool.PythonExecutor_secure import execute_python_code as python
+from web_tool.web_browsing import text_search as web
+from wiki_tool.search_wiki import fetch_wikipedia_content as wiki
 
 
 client = OpenAI(base_url="http://127.0.0.1:1234/v1", api_key="lm-studio")
@@ -17,7 +17,7 @@ MODEL = "lmstudio-community/qwen2.5-7b-instruct"
 Tools = [{
     "type": "function",
     "function": {
-        "name": "run_python_code",
+        "name": "python",
         "description": "Execute Python code and return the execution results. Use for math problems or task automation.",
         "parameters": {
             "type": "object",
@@ -25,6 +25,60 @@ Tools = [{
                 "code": {"type": "string", "description": "Complete Python code to execute. Must return a value."}
             },
             "required": ["code"]
+        }
+    }
+}, {
+    "type": "function",
+    "function": {
+        "name": "web",
+        "description": f"Search the web for relevant information. Current timestamp: {datetime.now()}",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query for websites"},
+                "embedding_matcher": {"type": "string", "description": "Used for finding relevant citations from websites"},
+                "number_of_websites": {
+                    "type": "integer",
+                    "description": "Maximum websites to visit",
+                    "default": 4,
+                    "minimum": 1,
+                    "maximum": 8
+                },
+                "number_of_citations": {
+                    "type": "integer",
+                    "description": "Maximum citations to scrape (250 words each)",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 10
+                }
+            },
+            "required": ["query", "embedding_matcher"]
+        }
+    }
+}, {
+    "type": "function",
+    "function": {
+        "name": "wiki",
+        "description": "Search Wikipedia for the most relevant article introduction",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query for Wikipedia article"}
+            },
+            "required": ["query"]
+        }
+    }
+}, {
+    "type": "function",
+    "function": {
+        "name": "url",
+        "description": "Scrape a website for its content",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL of the website to scrape"}
+            },
+            "required": ["url"]
         }
     }
 }]
@@ -111,7 +165,7 @@ def chat_loop():
                     arguments = json.loads(tool_call["function"]["arguments"])
 
                     if tool_call["function"]["name"] == "run_python_code":
-                        result = run_python_code(arguments["code"])
+                        result = python(arguments["code"])
                         messages.append({
                             "role": "tool",
                             "content": str(result),
@@ -127,6 +181,39 @@ def chat_loop():
                             if result["result"] is not None:
                                 print(f"Result:\n{result['result']}")
                         else:
+                            print(f"Error running and executing the code\n{result['error']}")
+                        print("-" * terminal_width)
+                    
+                    elif tool_call["function"]["name"] == "wiki":
+                        result = wiki(arguments["query"])
+                        messages.append({
+                            "role": "tool",
+                            "content": str(result),
+                            "tool_call_id": tool_call["id"]
+                        })
+                        terminal_width = shutil.get_terminal_size().columns
+                        print("\n" + "-" * terminal_width)
+                        print(arguments["qyery"])
+                        print("-" * terminal_width)
+                        if result:
+                            print(f"Output:\n{result}")
+                        else:
+                            print(f"Error running and executing the code\n{result['error']}")
+                        print("-" * terminal_width)
+                    
+                    elif tool_call["function"]["name"] == "web":
+                        result = web(arguments["query"], arguments["embedding_matcher"])
+                        messages.append({
+                            "role": "tool",
+                            "content": str(result),
+                            "tool_call_id": tool_call["id"]
+                        })
+                        terminal_width = shutil.get_terminal_size().columns
+                        print("\n" + "-" * terminal_width)
+                        print(f"query: {arguments['query']}")
+                        print("-" * terminal_width)
+                        if result:
+                            print(f"Output:\n{result}")
                             print(f"Error running and executing the code\n{result['error']}")
                         print("-" * terminal_width)
 
